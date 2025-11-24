@@ -244,8 +244,8 @@ export const generateCompositeImage = async (
 
   const debugImageUrl = await fileToDataUrl(markedResizedEnvironmentImage);
 
-  console.log('Generating semantic location description with gemini-2.5-flash-lite...');
-  
+  console.log('Generating semantic location description with gemini-3-pro-preview...');
+
   const markedEnvironmentImagePart = await fileToPart(markedResizedEnvironmentImage);
 
   const descriptionPrompt = `
@@ -270,8 +270,9 @@ Provide only the two descriptions concatenated in a few sentences.
   let semanticLocationDescription = '';
   try {
     const descriptionResponse = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-lite',
-      contents: { parts: [{ text: descriptionPrompt }, markedEnvironmentImagePart] }
+      model: 'gemini-3-pro-preview',
+      contents: { parts: [{ text: descriptionPrompt }, markedEnvironmentImagePart] },
+      config: { temperature: 1.0 },
     });
     semanticLocationDescription = descriptionResponse.text;
     console.log('Generated description:', semanticLocationDescription);
@@ -317,8 +318,12 @@ The output should ONLY be the final, composed image. Do not add any text or expl
   console.log('Sending images and augmented prompt...');
   
   const response: GenerateContentResponse = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image-preview',
+    model: 'gemini-3-pro-image-preview',
     contents: { parts: [objectImagePart, cleanEnvironmentImagePart, textPart] },
+    config: {
+      responseModalities: ['TEXT', 'IMAGE'],
+      temperature: 1.0,
+    },
   });
 
   console.log('Received response.');

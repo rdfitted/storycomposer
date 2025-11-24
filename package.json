@@ -24,7 +24,8 @@
     "react-dropzone": "^14.3.8",
     "react-image-crop": "^11.0.10",
     "react-player": "^3.3.1",
-    "tailwind-merge": "^3.3.1"
+    "tailwind-merge": "^3.3.1",
+    "zustand": "^4.5.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

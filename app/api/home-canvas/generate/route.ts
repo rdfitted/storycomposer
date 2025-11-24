@@ -84,8 +84,12 @@ The output should ONLY be the final, composed image. Do not add any text or expl
     console.log('Sending images and prompt to Gemini...');
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image-preview',
+      model: 'gemini-3-pro-image-preview',
       contents: { parts: [productImagePart, sceneImagePart, textPart] },
+      config: {
+        responseModalities: ['TEXT', 'IMAGE'],
+        temperature: 1.0,
+      },
     });
 
     console.log('Received response from Gemini.');

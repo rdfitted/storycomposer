@@ -25,6 +25,14 @@ export async function POST(req: Request) {
       operation: { name } as unknown as never,
     });
 
+    // Debug logging
+    console.log("[Veo Operation]", {
+      done: fresh.done,
+      hasError: !!fresh.error,
+      hasResponse: !!fresh.response,
+      error: fresh.error || null,
+    });
+
     return NextResponse.json(fresh);
   } catch (error) {
     console.error("Error polling operation:", error);
