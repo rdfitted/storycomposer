@@ -23,6 +23,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { Scene, cleanupAllSceneUrls } from "@/lib/storyboard";
 import SceneCard from "./SceneCard";
 import ModelSelector from "./ModelSelector";
+import CharacterBank from "./storyboard/CharacterBank";
+import { useStoryboardCharacters } from "@/stores/useCreativeStore";
 
 interface StoryboardComposerProps {
   scenes: Scene[];
@@ -32,23 +34,30 @@ interface StoryboardComposerProps {
   aspectRatio: string;
   setAspectRatio: (ratio: string) => void;
   onGenerateScene: (sceneId: string) => void;
+  onEnhancePrompt: (sceneId: string) => void;
 }
+
+import type { StoryboardCharacter } from "@/lib/types/storyboard-characters";
 
 // Sortable wrapper for SceneCard
 interface SortableSceneCardProps {
   scene: Scene;
   sceneIndex: number;
+  characters: StoryboardCharacter[];
   onUpdateScene: (sceneId: string, updates: Partial<Scene>) => void;
   onRemoveScene: (sceneId: string) => void;
   onGenerateScene: (sceneId: string) => void;
+  onEnhancePrompt: (sceneId: string) => void;
 }
 
 const SortableSceneCard: React.FC<SortableSceneCardProps> = ({
   scene,
   sceneIndex,
+  characters,
   onUpdateScene,
   onRemoveScene,
   onGenerateScene,
+  onEnhancePrompt,
 }) => {
   const {
     attributes,
@@ -70,9 +79,11 @@ const SortableSceneCard: React.FC<SortableSceneCardProps> = ({
       <SceneCard
         scene={scene}
         sceneIndex={sceneIndex}
+        characters={characters}
         onUpdateScene={onUpdateScene}
         onRemoveScene={onRemoveScene}
         onGenerateScene={onGenerateScene}
+        onEnhancePrompt={onEnhancePrompt}
         dragHandleProps={{ ...attributes, ...listeners }}
       />
     </div>
@@ -87,8 +98,11 @@ const StoryboardComposer: React.FC<StoryboardComposerProps> = ({
   aspectRatio,
   setAspectRatio,
   onGenerateScene,
+  onEnhancePrompt,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCharacterBankCollapsed, setIsCharacterBankCollapsed] = useState(false);
+  const { characters } = useStoryboardCharacters();
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -98,12 +112,17 @@ const StoryboardComposer: React.FC<StoryboardComposerProps> = ({
   );
 
   const handleAddScene = () => {
-    // Create an empty scene - imageFile will be null until user uploads
-    const newScene = {
+    // Create an empty scene with all new fields
+    const newScene: Scene = {
       id: crypto.randomUUID(),
-      imageFile: null, // Will be set when user uploads
+      imageFile: null,
+      frameMode: "single",
+      firstFrameFile: null,
+      lastFrameFile: null,
       prompt: "",
-      aspectRatio: aspectRatio, // Use global aspect ratio
+      isEnhancingPrompt: false,
+      aspectRatio: aspectRatio,
+      characterIds: [],
       operationName: null,
       isGenerating: false,
       videoUrl: null,
@@ -116,7 +135,7 @@ const StoryboardComposer: React.FC<StoryboardComposerProps> = ({
   };
 
   const handleUpdateScene = useCallback((sceneId: string, updates: Partial<Scene>) => {
-    setScenes(scenes.map(scene => 
+    setScenes(scenes.map(scene =>
       scene.id === sceneId ? { ...scene, ...updates } : scene
     ));
   }, [scenes, setScenes]);
@@ -170,7 +189,7 @@ const StoryboardComposer: React.FC<StoryboardComposerProps> = ({
               {scenes.length} scenes • {totalCompleted} completed • {totalGenerating} generating
             </div>
           </div>
-          <button 
+          <button
             className="p-2 rounded-full hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
             onClick={() => setIsCollapsed(!isCollapsed)}
           >
@@ -181,7 +200,7 @@ const StoryboardComposer: React.FC<StoryboardComposerProps> = ({
             )}
           </button>
         </div>
-        
+
         {/* Settings Row - Separated from header */}
         {!isCollapsed && (
           <div className="flex flex-wrap items-center gap-4">
@@ -216,7 +235,15 @@ const StoryboardComposer: React.FC<StoryboardComposerProps> = ({
       {/* Collapsible Content */}
       {!isCollapsed && (
         <div className="px-4 pb-4 border-t border-[var(--md-sys-color-outline-variant)]">
+          {/* Character Bank */}
           <div className="pt-4 mb-4">
+            <CharacterBank
+              collapsed={isCharacterBankCollapsed}
+              onToggleCollapse={() => setIsCharacterBankCollapsed(!isCharacterBankCollapsed)}
+            />
+          </div>
+
+          <div className="mb-4">
             <button
               onClick={handleAddScene}
               className="flex items-center gap-2 px-4 py-2 rounded-xl md-label-large transition-all duration-200 hover:bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)]"
@@ -248,9 +275,11 @@ const StoryboardComposer: React.FC<StoryboardComposerProps> = ({
                         key={scene.id}
                         scene={scene}
                         sceneIndex={index}
+                        characters={characters}
                         onUpdateScene={handleUpdateScene}
                         onRemoveScene={handleRemoveScene}
                         onGenerateScene={onGenerateScene}
+                        onEnhancePrompt={onEnhancePrompt}
                       />
                     ))}
                   </div>

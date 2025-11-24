@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import ReactCrop, { type Crop, type PixelCrop } from "react-image-crop";
+import { type Crop, type PixelCrop } from "react-image-crop";
 import AIEditorCanvas from "./AIEditorCanvas";
 import AIEditorTabs from "./AIEditorTabs";
 import AIEditorHistory from "./AIEditorHistory";

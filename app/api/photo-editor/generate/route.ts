@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const prompt = formData.get("prompt") as string;
-    const model = (formData.get("model") as string) || "gemini-2.5-flash-image-preview";
+    const model = (formData.get("model") as string) || "gemini-3-pro-image-preview";
     
     // Input validation
     if (!prompt || typeof prompt !== 'string') {
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     }
     
     // Validate model parameter
-    const allowedModels = ["gemini-2.5-flash-image-preview"];
+    const allowedModels = ["gemini-3-pro-image-preview"];
     if (!allowedModels.includes(model)) {
       return NextResponse.json({ error: "Invalid model" }, { status: 400 });
     }
@@ -88,6 +88,10 @@ export async function POST(req: Request) {
     const resp = await ai.models.generateContent({
       model,
       contents: contentParts,
+      config: {
+        responseModalities: ['TEXT', 'IMAGE'],
+        temperature: 1.0,
+      },
     });
 
     // Extract image data from the response

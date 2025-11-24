@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback } from 'react';
-import { Upload } from 'lucide-react';
+// Upload icon available for future use
 import ImageUploader from './ImageUploader';
 import ObjectCard from './ObjectCard';
 
@@ -11,7 +11,7 @@ interface Product {
   imageUrl: string;
 }
 
-interface HomeCanvasProps {}
+type HomeCanvasProps = Record<string, never>;
 
 const HomeCanvas: React.FC<HomeCanvasProps> = () => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -19,13 +19,12 @@ const HomeCanvas: React.FC<HomeCanvasProps> = () => {
   const [sceneImage, setSceneImage] = useState<string | null>(null);
   const [sceneFile, setSceneFile] = useState<File | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [, setGeneratedImage] = useState<string | null>(null);
   const [dropPosition, setDropPosition] = useState<{x: number, y: number} | null>(null);
   const [debugImage, setDebugImage] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const sceneInputRef = useRef<HTMLInputElement>(null);
   const sceneImageRef = useRef<HTMLImageElement>(null);
 
   const handleProductImageUpload = useCallback((file: File) => {
@@ -54,49 +53,7 @@ const HomeCanvas: React.FC<HomeCanvasProps> = () => {
     setDropPosition(null);
   }, []);
 
-  const handleSceneClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (!selectedProduct || !sceneImageRef.current) return;
-
-    const rect = event.currentTarget.getBoundingClientRect();
-    const img = sceneImageRef.current;
-    const { naturalWidth, naturalHeight } = img;
-    const { width: containerWidth, height: containerHeight } = rect;
-
-    const imageAspectRatio = naturalWidth / naturalHeight;
-    const containerAspectRatio = containerWidth / containerHeight;
-
-    let renderedWidth, renderedHeight;
-    if (imageAspectRatio > containerAspectRatio) {
-      renderedWidth = containerWidth;
-      renderedHeight = containerWidth / imageAspectRatio;
-    } else {
-      renderedHeight = containerHeight;
-      renderedWidth = containerHeight * imageAspectRatio;
-    }
-
-    const offsetX = (containerWidth - renderedWidth) / 2;
-    const offsetY = (containerHeight - renderedHeight) / 2;
-
-    const pointX = event.clientX - rect.left;
-    const pointY = event.clientY - rect.top;
-
-    const imageX = pointX - offsetX;
-    const imageY = pointY - offsetY;
-
-    if (imageX < 0 || imageX > renderedWidth || imageY < 0 || imageY > renderedHeight) {
-      return;
-    }
-
-    const xPercent = (imageX / renderedWidth) * 100;
-    const yPercent = (imageY / renderedHeight) * 100;
-
-    setDropPosition({ x: pointX, y: pointY });
-    
-    // Generate composite image
-    generateComposite(xPercent, yPercent);
-  }, [selectedProduct]);
-
-  const generateComposite = async (xPercent: number, yPercent: number) => {
+  const generateComposite = useCallback(async (xPercent: number, yPercent: number) => {
     if (!productImageFile || !sceneFile || !selectedProduct) return;
 
     setIsGenerating(true);
@@ -130,7 +87,7 @@ const HomeCanvas: React.FC<HomeCanvasProps> = () => {
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, [productImageFile, sceneFile, selectedProduct]);
 
   const productImageUrl = selectedProduct ? selectedProduct.imageUrl : null;
 

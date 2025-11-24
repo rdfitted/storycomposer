@@ -15,33 +15,47 @@ import StoryboardComposer from "@/components/ui/StoryboardComposer";
 import PhotoEditor from "@/components/ui/PhotoEditor";
 import AIEditor from "@/components/ui/AIEditor";
 import HomeCanvas from "@/components/ui/HomeCanvas";
+import NanoBananaPro from "@/components/ui/NanoBananaPro/NanoBananaPro";
+import ComicCreator from "@/components/ui/ComicCreator/ComicCreator";
+import VoxelGenerator from "@/components/ui/VoxelGenerator/VoxelGenerator";
 import { Scene, cleanupAllSceneUrls } from "@/lib/storyboard";
+import type { Mode } from "@/lib/types";
 
 type VeoOperationName = string | null;
+type FrameMode = "start-only" | "end-only" | "interpolation";
 
 const POLL_INTERVAL_MS = 5000;
 
 const VeoStudio: React.FC = () => {
   // Mode management
-  const [mode, setMode] = useState<"single" | "storyboard" | "photo-editor" | "ai-editor" | "home-canvas">("photo-editor");
-  
+  const [mode, setMode] = useState<Mode>("photo-editor");
+
   // Single video state
   const [prompt, setPrompt] = useState(""); // Video prompt
   const [negativePrompt, setNegativePrompt] = useState("");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [selectedModel, setSelectedModel] = useState(
-    "veo-3.0-generate-preview"
+    "veo-3.1-generate-preview"
   );
-  
+
   // Storyboard state
   const [scenes, setScenes] = useState<Scene[]>([]);
 
-  // Imagen-specific prompt
-  const [imagePrompt, setImagePrompt] = useState("");
+  // Frame mode and frame state
+  const [frameMode, setFrameMode] = useState<FrameMode>("start-only");
+  const [startingFrameFile, setStartingFrameFile] = useState<File | null>(null);
+  const [endingFrameFile, setEndingFrameFile] = useState<File | null>(null);
+  const [generatedStartImage, setGeneratedStartImage] = useState<string | null>(null);
+  const [generatedEndImage, setGeneratedEndImage] = useState<string | null>(null);
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  // Image generation prompts
+  const [startImagePrompt, setStartImagePrompt] = useState("");
+  const [endImagePrompt, setEndImagePrompt] = useState("");
+
   const [imagenBusy, setImagenBusy] = useState(false);
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null); // data URL
+
+  // Prompt enhancement
+  const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
 
   const [operationName, setOperationName] = useState<VeoOperationName>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -53,20 +67,43 @@ const VeoStudio: React.FC = () => {
 
   const [showImageTools, setShowImageTools] = useState(false);
 
+  // Determine if we have the required frames based on frame mode
+  const hasRequiredFrames = useMemo(() => {
+    if (!showImageTools) return true; // No frames required if image tools hidden
+
+    const hasStartFrame = startingFrameFile || generatedStartImage;
+    const hasEndFrame = endingFrameFile || generatedEndImage;
+
+    switch (frameMode) {
+      case "start-only":
+        return !!hasStartFrame;
+      case "end-only":
+        return !!hasEndFrame;
+      case "interpolation":
+        return !!hasStartFrame && !!hasEndFrame;
+      default:
+        return true;
+    }
+  }, [showImageTools, frameMode, startingFrameFile, generatedStartImage, endingFrameFile, generatedEndImage]);
+
   const canStart = useMemo(() => {
     if (!prompt.trim()) return false;
-    if (showImageTools && !(imageFile || generatedImage)) return false;
+    if (showImageTools && !hasRequiredFrames) return false;
     return true;
-  }, [prompt, showImageTools, imageFile, generatedImage]);
+  }, [prompt, showImageTools, hasRequiredFrames]);
 
   const resetAll = () => {
     // Reset single video state
     setPrompt("");
     setNegativePrompt("");
     setAspectRatio("16:9");
-    setImagePrompt("");
-    setImageFile(null);
-    setGeneratedImage(null);
+    setFrameMode("start-only");
+    setStartingFrameFile(null);
+    setEndingFrameFile(null);
+    setGeneratedStartImage(null);
+    setGeneratedEndImage(null);
+    setStartImagePrompt("");
+    setEndImagePrompt("");
     setOperationName(null);
     setIsGenerating(false);
     setVideoUrl(null);
@@ -79,33 +116,91 @@ const VeoStudio: React.FC = () => {
       trimmedUrlRef.current = null;
     }
     trimmedBlobRef.current = null;
-    
+
     // Reset storyboard state
     cleanupAllSceneUrls(scenes);
     setScenes([]);
   };
 
-  // Imagen helper
-  const generateWithImagen = useCallback(async () => {
+  // Generate starting frame with Imagen
+  const generateStartWithImagen = useCallback(async () => {
+    if (!startImagePrompt.trim() || imagenBusy) return;
     setImagenBusy(true);
-    setGeneratedImage(null);
+    setGeneratedStartImage(null);
     try {
       const resp = await fetch("/api/imagen/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: imagePrompt }),
+        body: JSON.stringify({ prompt: startImagePrompt }),
       });
       const json = await resp.json();
       if (json?.image?.imageBytes) {
         const dataUrl = `data:${json.image.mimeType};base64,${json.image.imageBytes}`;
-        setGeneratedImage(dataUrl);
+        setGeneratedStartImage(dataUrl);
+        setStartingFrameFile(null); // Clear uploaded file if generating
       }
     } catch (e) {
       console.error(e);
     } finally {
       setImagenBusy(false);
     }
-  }, [imagePrompt]);
+  }, [startImagePrompt, imagenBusy]);
+
+  // Generate ending frame with Imagen
+  const generateEndWithImagen = useCallback(async () => {
+    if (!endImagePrompt.trim() || imagenBusy) return;
+    setImagenBusy(true);
+    setGeneratedEndImage(null);
+    try {
+      const resp = await fetch("/api/imagen/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: endImagePrompt }),
+      });
+      const json = await resp.json();
+      if (json?.image?.imageBytes) {
+        const dataUrl = `data:${json.image.mimeType};base64,${json.image.imageBytes}`;
+        setGeneratedEndImage(dataUrl);
+        setEndingFrameFile(null); // Clear uploaded file if generating
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setImagenBusy(false);
+    }
+  }, [endImagePrompt, imagenBusy]);
+
+  // Enhance prompt with AI
+  const enhancePrompt = useCallback(async () => {
+    if (!prompt.trim() || isEnhancingPrompt) return;
+    setIsEnhancingPrompt(true);
+    try {
+      const hasStartFrame = startingFrameFile || generatedStartImage;
+      const hasEndFrame = endingFrameFile || generatedEndImage;
+
+      const context = {
+        aspectRatio,
+        model: selectedModel,
+        hasStartingFrame: !!hasStartFrame,
+        hasEndingFrame: !!hasEndFrame,
+        frameMode: showImageTools ? frameMode : "none" as const,
+      };
+
+      const resp = await fetch("/api/veo/enhance-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, context }),
+      });
+      const json = await resp.json();
+      if (json?.enhancedPrompt) {
+        setPrompt(json.enhancedPrompt);
+      }
+    } catch (e) {
+      console.error("Error enhancing prompt:", e);
+    } finally {
+      setIsEnhancingPrompt(false);
+    }
+  }, [prompt, isEnhancingPrompt, aspectRatio, selectedModel, showImageTools, frameMode, startingFrameFile, generatedStartImage, endingFrameFile, generatedEndImage]);
 
   // Start Veo job
   const startGeneration = useCallback(async () => {
@@ -120,13 +215,32 @@ const VeoStudio: React.FC = () => {
     if (aspectRatio) form.append("aspectRatio", aspectRatio);
 
     if (showImageTools) {
-      if (imageFile) {
-        form.append("imageFile", imageFile);
-      } else if (generatedImage) {
-        const [meta, b64] = generatedImage.split(",");
-        const mime = meta?.split(";")?.[0]?.replace("data:", "") || "image/png";
-        form.append("imageBase64", b64);
-        form.append("imageMimeType", mime);
+      form.append("frameMode", frameMode);
+
+      // Handle starting frame
+      const needsStartFrame = frameMode === "start-only" || frameMode === "interpolation";
+      if (needsStartFrame) {
+        if (startingFrameFile) {
+          form.append("startingFrame", startingFrameFile);
+        } else if (generatedStartImage) {
+          const [meta, b64] = generatedStartImage.split(",");
+          const mime = meta?.split(";")?.[0]?.replace("data:", "") || "image/png";
+          form.append("startingFrameBase64", b64);
+          form.append("startingFrameMimeType", mime);
+        }
+      }
+
+      // Handle ending frame
+      const needsEndFrame = frameMode === "end-only" || frameMode === "interpolation";
+      if (needsEndFrame) {
+        if (endingFrameFile) {
+          form.append("endingFrame", endingFrameFile);
+        } else if (generatedEndImage) {
+          const [meta, b64] = generatedEndImage.split(",");
+          const mime = meta?.split(";")?.[0]?.replace("data:", "") || "image/png";
+          form.append("endingFrameBase64", b64);
+          form.append("endingFrameMimeType", mime);
+        }
       }
     }
 
@@ -148,26 +262,92 @@ const VeoStudio: React.FC = () => {
     negativePrompt,
     aspectRatio,
     showImageTools,
-    imageFile,
-    generatedImage,
+    frameMode,
+    startingFrameFile,
+    generatedStartImage,
+    endingFrameFile,
+    generatedEndImage,
   ]);
+
+  // Enhance scene prompt with AI
+  const enhanceScenePrompt = useCallback(async (sceneId: string) => {
+    const scene = scenes.find(s => s.id === sceneId);
+    if (!scene || !scene.prompt.trim() || scene.isEnhancingPrompt) return;
+
+    // Update scene state to enhancing
+    setScenes(prev => prev.map(s =>
+      s.id === sceneId ? { ...s, isEnhancingPrompt: true } : s
+    ));
+
+    try {
+      const hasStartFrame = scene.firstFrameFile;
+      const hasEndFrame = scene.lastFrameFile;
+
+      const context = {
+        aspectRatio: scene.aspectRatio,
+        model: selectedModel,
+        hasStartingFrame: !!hasStartFrame,
+        hasEndingFrame: !!hasEndFrame,
+        frameMode: scene.frameMode === "interpolation" ? "interpolation" :
+                   scene.frameMode === "single" ? "start-only" : scene.frameMode,
+      };
+
+      const resp = await fetch("/api/veo/enhance-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: scene.prompt, context }),
+      });
+      const json = await resp.json();
+      if (json?.enhancedPrompt) {
+        setScenes(prev => prev.map(s =>
+          s.id === sceneId ? { ...s, prompt: json.enhancedPrompt, isEnhancingPrompt: false } : s
+        ));
+      } else {
+        setScenes(prev => prev.map(s =>
+          s.id === sceneId ? { ...s, isEnhancingPrompt: false } : s
+        ));
+      }
+    } catch (e) {
+      console.error("Error enhancing scene prompt:", e);
+      setScenes(prev => prev.map(s =>
+        s.id === sceneId ? { ...s, isEnhancingPrompt: false } : s
+      ));
+    }
+  }, [scenes, selectedModel, setScenes]);
 
   // Generate individual scene
   const generateScene = useCallback(async (sceneId: string) => {
     const scene = scenes.find(s => s.id === sceneId);
-    if (!scene || !scene.imageFile || !scene.prompt.trim() || scene.isGenerating) return;
+    if (!scene || !scene.prompt.trim() || scene.isGenerating) return;
+
+    // Validate based on frame mode
+    if (scene.frameMode === "single" && !scene.imageFile) return;
+    if (scene.frameMode === "interpolation" && (!scene.firstFrameFile || !scene.lastFrameFile)) return;
 
     // Update scene state to generating
-    setScenes(prev => prev.map(s => 
+    setScenes(prev => prev.map(s =>
       s.id === sceneId ? { ...s, isGenerating: true, operationName: null } : s
     ));
 
     const form = new FormData();
     form.append("prompt", scene.prompt);
     form.append("model", selectedModel);
-    form.append("imageFile", scene.imageFile);
-    // Use scene-specific aspect ratio
     form.append("aspectRatio", scene.aspectRatio);
+
+    // Handle different frame modes
+    if (scene.frameMode === "single" && scene.imageFile) {
+      // Legacy single image mode
+      form.append("imageFile", scene.imageFile);
+    } else if (scene.frameMode === "interpolation") {
+      // Dual frame mode
+      form.append("frameMode", "interpolation");
+      if (scene.firstFrameFile) {
+        form.append("startingFrame", scene.firstFrameFile);
+      }
+      if (scene.lastFrameFile) {
+        form.append("endingFrame", scene.lastFrameFile);
+      }
+    }
 
     try {
       const resp = await fetch("/api/veo/generate", {
@@ -175,18 +355,18 @@ const VeoStudio: React.FC = () => {
         body: form,
       });
       const json = await resp.json();
-      
+
       // Update scene with operation name
-      setScenes(prev => prev.map(s => 
+      setScenes(prev => prev.map(s =>
         s.id === sceneId ? { ...s, operationName: json?.name || null } : s
       ));
     } catch (e) {
       console.error(e);
-      setScenes(prev => prev.map(s => 
+      setScenes(prev => prev.map(s =>
         s.id === sceneId ? { ...s, isGenerating: false } : s
       ));
     }
-  }, [scenes, selectedModel]);
+  }, [scenes, selectedModel, setScenes]);
 
   // Poll operation until done then download
   useEffect(() => {
@@ -201,6 +381,16 @@ const VeoStudio: React.FC = () => {
         });
         const fresh = await resp.json();
         if (fresh?.done) {
+          // Check if video was filtered by safety
+          if (fresh?.response?.raiMediaFilteredCount > 0) {
+            const reason = fresh?.response?.raiMediaFilteredReasons?.[0] || "Content was filtered by safety policies.";
+            console.error("[Veo] Video filtered:", reason);
+            alert(`Video generation blocked: ${reason}`);
+            setIsGenerating(false);
+            setOperationName(null);
+            return;
+          }
+
           const fileUri = fresh?.response?.generatedVideos?.[0]?.video?.uri;
           if (fileUri) {
             const dl = await fetch("/api/veo/download", {
@@ -213,6 +403,10 @@ const VeoStudio: React.FC = () => {
             const url = URL.createObjectURL(blob);
             setVideoUrl(url);
             originalVideoUrlRef.current = url;
+          } else {
+            // No video and no filter - unknown error
+            console.error("[Veo] No video URI in response:", fresh);
+            alert("Video generation completed but no video was returned.");
           }
           setIsGenerating(false);
           return;
@@ -248,7 +442,7 @@ const VeoStudio: React.FC = () => {
             body: JSON.stringify({ name: scene.operationName }),
           });
           const fresh = await resp.json();
-          
+
           if (fresh?.done) {
             const fileUri = fresh?.response?.generatedVideos?.[0]?.video?.uri;
             if (fileUri) {
@@ -259,9 +453,9 @@ const VeoStudio: React.FC = () => {
               });
               const blob = await dl.blob();
               const url = URL.createObjectURL(blob);
-              
+
               // Update scene with video
-              setScenes(prev => prev.map(s => 
+              setScenes(prev => prev.map(s =>
                 s.id === scene.id ? {
                   ...s,
                   isGenerating: false,
@@ -272,7 +466,7 @@ const VeoStudio: React.FC = () => {
               ));
             } else {
               // Mark as failed
-              setScenes(prev => prev.map(s => 
+              setScenes(prev => prev.map(s =>
                 s.id === scene.id ? { ...s, isGenerating: false } : s
               ));
             }
@@ -283,7 +477,7 @@ const VeoStudio: React.FC = () => {
           }
         } catch (e) {
           console.error(e);
-          setScenes(prev => prev.map(s => 
+          setScenes(prev => prev.map(s =>
             s.id === scene.id ? { ...s, isGenerating: false } : s
           ));
         }
@@ -298,11 +492,19 @@ const VeoStudio: React.FC = () => {
     };
   }, [scenes]);
 
-  const onPickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onPickStartingFrame = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f) {
-      setImageFile(f);
-      setGeneratedImage(null);
+      setStartingFrameFile(f);
+      setGeneratedStartImage(null);
+    }
+  };
+
+  const onPickEndingFrame = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) {
+      setEndingFrameFile(f);
+      setGeneratedEndImage(null);
     }
   };
 
@@ -369,6 +571,18 @@ const VeoStudio: React.FC = () => {
         <div className="min-h-screen pt-20">
           <HomeCanvas />
         </div>
+      ) : mode === "nano-banana" ? (
+        <div className="min-h-screen pt-20">
+          <NanoBananaPro />
+        </div>
+      ) : mode === "comic-creator" ? (
+        <div className="min-h-screen pt-20">
+          <ComicCreator />
+        </div>
+      ) : mode === "voxel-generator" ? (
+        <div className="min-h-screen pt-20">
+          <VoxelGenerator />
+        </div>
       ) : mode === "single" ? (
         <div className="flex items-center justify-center min-h-screen pb-40 px-4">
           {!videoUrl &&
@@ -406,9 +620,10 @@ const VeoStudio: React.FC = () => {
                 aspectRatio={aspectRatio}
                 setAspectRatio={setAspectRatio}
                 onGenerateScene={generateScene}
+                onEnhancePrompt={enhanceScenePrompt}
               />
             </div>
-            
+
             {/* Bottom Section - Storyboard Grid (100% width) */}
             <div className="flex-1 px-6">
               {scenes.length === 0 ? (
@@ -475,13 +690,23 @@ const VeoStudio: React.FC = () => {
           startGeneration={startGeneration}
           showImageTools={showImageTools}
           setShowImageTools={setShowImageTools}
-          imagePrompt={imagePrompt}
-          setImagePrompt={setImagePrompt}
+          frameMode={frameMode}
+          setFrameMode={setFrameMode}
+          startingFrameFile={startingFrameFile}
+          generatedStartImage={generatedStartImage}
+          onPickStartingFrame={onPickStartingFrame}
+          endingFrameFile={endingFrameFile}
+          generatedEndImage={generatedEndImage}
+          onPickEndingFrame={onPickEndingFrame}
+          startImagePrompt={startImagePrompt}
+          setStartImagePrompt={setStartImagePrompt}
+          endImagePrompt={endImagePrompt}
+          setEndImagePrompt={setEndImagePrompt}
           imagenBusy={imagenBusy}
-          onPickImage={onPickImage}
-          generateWithImagen={generateWithImagen}
-          imageFile={imageFile}
-          generatedImage={generatedImage}
+          generateStartWithImagen={generateStartWithImagen}
+          generateEndWithImagen={generateEndWithImagen}
+          isEnhancingPrompt={isEnhancingPrompt}
+          enhancePrompt={enhancePrompt}
           resetAll={resetAll}
         />
       )}

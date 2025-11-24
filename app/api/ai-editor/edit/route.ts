@@ -99,8 +99,12 @@ Output: Return ONLY the final adjusted image. Do not return text.`;
     console.log(`Starting ${editType} generation...`);
     
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image-preview",
-      contents: { parts: [originalImagePart, textPart] }
+      model: "gemini-3-pro-image-preview",
+      contents: { parts: [originalImagePart, textPart] },
+      config: {
+        responseModalities: ['TEXT', 'IMAGE'],
+        temperature: 1.0,
+      },
     });
     
     console.log(`Received response from model for ${editType}.`);

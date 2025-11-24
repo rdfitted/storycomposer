@@ -11,14 +11,14 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
   setSelectedModel,
 }) => {
   const models = [
-    "veo-3.0-generate-preview",
-    "veo-3.0-fast-generate-preview",
+    "veo-3.1-generate-preview",
+    "veo-3.1-fast-generate-preview",
     "veo-2.0-generate-001",
   ];
 
   const formatModelName = (model: string) => {
-    if (model.includes("veo-3.0-fast")) return "Veo 3 - Fast";
-    if (model.includes("veo-3.0")) return "Veo 3";
+    if (model.includes("veo-3.1-fast")) return "Veo 3.1 - Fast";
+    if (model.includes("veo-3.1")) return "Veo 3.1";
     if (model.includes("veo-2.0")) return "Veo 2";
     return model;
   };

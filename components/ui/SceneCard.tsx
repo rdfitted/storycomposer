@@ -9,35 +9,64 @@ import {
   ArrowRight,
   Download,
   RotateCcw,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import NextImage from "next/image";
-import { Scene } from "@/lib/storyboard";
+import { Scene, SceneFrameMode, canSceneGenerate } from "@/lib/storyboard";
 import VideoPlayer from "./VideoPlayer";
+import CharacterSelector from "./storyboard/CharacterSelector";
+import type { StoryboardCharacter } from "@/lib/types/storyboard-characters";
 
 interface SceneCardProps {
   scene: Scene;
   sceneIndex: number;
+  characters: StoryboardCharacter[];
   onUpdateScene: (sceneId: string, updates: Partial<Scene>) => void;
   onRemoveScene: (sceneId: string) => void;
   onGenerateScene: (sceneId: string) => void;
+  onEnhancePrompt: (sceneId: string) => void;
   dragHandleProps?: React.HTMLProps<HTMLDivElement>;
 }
 
 const SceneCard: React.FC<SceneCardProps> = ({
   scene,
   sceneIndex,
+  characters,
   onUpdateScene,
   onRemoveScene,
   onGenerateScene,
+  onEnhancePrompt,
   dragHandleProps,
 }) => {
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDraggingFirst, setIsDraggingFirst] = useState(false);
+  const [isDraggingLast, setIsDraggingLast] = useState(false);
+  const [isDraggingSingle, setIsDraggingSingle] = useState(false);
+  const singleFileInputRef = useRef<HTMLInputElement>(null);
+  const firstFrameInputRef = useRef<HTMLInputElement>(null);
+  const lastFrameInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Single image upload (legacy mode)
+  const handleSingleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       onUpdateScene(scene.id, { imageFile: file });
+    }
+  };
+
+  // First frame upload
+  const handleFirstFrameUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onUpdateScene(scene.id, { firstFrameFile: file });
+    }
+  };
+
+  // Last frame upload
+  const handleLastFrameUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onUpdateScene(scene.id, { lastFrameFile: file });
     }
   };
 
@@ -45,29 +74,54 @@ const SceneCard: React.FC<SceneCardProps> = ({
     onUpdateScene(scene.id, { prompt: e.target.value });
   };
 
-  const handleOpenFileDialog = () => {
-    fileInputRef.current?.click();
+  const handleFrameModeChange = (mode: SceneFrameMode) => {
+    onUpdateScene(scene.id, { frameMode: mode });
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  // Drag and drop handlers
+  const handleSingleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
+    setIsDraggingSingle(true);
   };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
+  const handleSingleDragLeave = () => setIsDraggingSingle(false);
+  const handleSingleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
+    setIsDraggingSingle(false);
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       onUpdateScene(scene.id, { imageFile: files[0] });
     }
   };
 
-  const canGenerate = scene.imageFile && scene.prompt.trim() && !scene.isGenerating;
+  const handleFirstDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingFirst(true);
+  };
+  const handleFirstDragLeave = () => setIsDraggingFirst(false);
+  const handleFirstDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingFirst(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      onUpdateScene(scene.id, { firstFrameFile: files[0] });
+    }
+  };
+
+  const handleLastDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingLast(true);
+  };
+  const handleLastDragLeave = () => setIsDraggingLast(false);
+  const handleLastDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingLast(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      onUpdateScene(scene.id, { lastFrameFile: files[0] });
+    }
+  };
+
+  const canGenerate = canSceneGenerate(scene);
 
   const handleTrimmedOutput = (blob: Blob) => {
     if (scene.trimmedUrlRef) {
@@ -116,6 +170,8 @@ const SceneCard: React.FC<SceneCardProps> = ({
     }, 0);
   };
 
+  const isDualFrameMode = scene.frameMode === "interpolation";
+
   return (
     <div className="md-surface-container-high border border-[var(--md-sys-color-outline-variant)] rounded-2xl p-4 md-elevation-2">
       {/* Header */}
@@ -140,66 +196,223 @@ const SceneCard: React.FC<SceneCardProps> = ({
         </button>
       </div>
 
+      {/* Frame Mode Toggle */}
+      <div className="flex items-center gap-2 mb-4">
+        <span className="md-label-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+          Mode:
+        </span>
+        <div className="flex rounded-lg overflow-hidden border border-[var(--md-sys-color-outline-variant)]">
+          <button
+            onClick={() => handleFrameModeChange("single")}
+            className={`px-3 py-1 md-label-small transition-all ${
+              scene.frameMode === "single"
+                ? "bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]"
+                : "bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+            }`}
+          >
+            Single
+          </button>
+          <button
+            onClick={() => handleFrameModeChange("interpolation")}
+            className={`px-3 py-1 md-label-small transition-all border-l border-[var(--md-sys-color-outline-variant)] ${
+              scene.frameMode === "interpolation"
+                ? "bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]"
+                : "bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+            }`}
+          >
+            Start + End
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Image Upload Section */}
         <div>
-          <div
-            className={`rounded-xl border-2 border-dashed p-4 cursor-pointer transition-all duration-200 ${
-              isDragging
-                ? "border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]"
-                : "border-[var(--md-sys-color-outline)] hover:border-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]"
-            }`}
-            onClick={handleOpenFileDialog}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            {scene.imageFile ? (
-              <div className="space-y-2">
-                <NextImage
-                  src={URL.createObjectURL(scene.imageFile)}
-                  alt="Scene image"
-                  width={400}
-                  height={225}
-                  className="w-full h-32 object-cover rounded-lg"
-                />
-                <div className="md-body-small text-center" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-                  {scene.imageFile.name}
+          {isDualFrameMode ? (
+            // Dual Frame Upload
+            <div className="space-y-3">
+              {/* First Frame */}
+              <div>
+                <div className="md-label-small mb-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                  First Frame
+                </div>
+                <div
+                  className={`rounded-xl border-2 border-dashed p-3 cursor-pointer transition-all duration-200 ${
+                    isDraggingFirst
+                      ? "border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]"
+                      : "border-[var(--md-sys-color-outline)] hover:border-[var(--md-sys-color-primary)]"
+                  }`}
+                  onClick={() => firstFrameInputRef.current?.click()}
+                  onDragOver={handleFirstDragOver}
+                  onDragLeave={handleFirstDragLeave}
+                  onDrop={handleFirstDrop}
+                >
+                  {scene.firstFrameFile ? (
+                    <div className="flex items-center gap-2">
+                      <NextImage
+                        src={URL.createObjectURL(scene.firstFrameFile)}
+                        alt="First frame"
+                        width={80}
+                        height={45}
+                        className="w-16 h-10 object-cover rounded"
+                      />
+                      <span className="md-body-small truncate" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                        {scene.firstFrameFile.name}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 py-2">
+                      <Upload className="w-4 h-4" style={{ color: 'var(--md-sys-color-primary)' }} />
+                      <span className="md-label-small" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+                        Upload first frame
+                      </span>
+                    </div>
+                  )}
+                  <input
+                    ref={firstFrameInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFirstFrameUpload}
+                  />
                 </div>
               </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2 py-8">
-                <Upload className="w-8 h-8" style={{ color: 'var(--md-sys-color-primary)' }} />
-                <div className="text-center">
-                  <div className="md-label-large" style={{ color: 'var(--md-sys-color-on-surface)' }}>
-                    Upload Image
-                  </div>
-                  <div className="md-body-small" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-                    Required for scene
-                  </div>
+
+              {/* Last Frame */}
+              <div>
+                <div className="md-label-small mb-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                  Last Frame
+                </div>
+                <div
+                  className={`rounded-xl border-2 border-dashed p-3 cursor-pointer transition-all duration-200 ${
+                    isDraggingLast
+                      ? "border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]"
+                      : "border-[var(--md-sys-color-outline)] hover:border-[var(--md-sys-color-primary)]"
+                  }`}
+                  onClick={() => lastFrameInputRef.current?.click()}
+                  onDragOver={handleLastDragOver}
+                  onDragLeave={handleLastDragLeave}
+                  onDrop={handleLastDrop}
+                >
+                  {scene.lastFrameFile ? (
+                    <div className="flex items-center gap-2">
+                      <NextImage
+                        src={URL.createObjectURL(scene.lastFrameFile)}
+                        alt="Last frame"
+                        width={80}
+                        height={45}
+                        className="w-16 h-10 object-cover rounded"
+                      />
+                      <span className="md-body-small truncate" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                        {scene.lastFrameFile.name}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 py-2">
+                      <Upload className="w-4 h-4" style={{ color: 'var(--md-sys-color-primary)' }} />
+                      <span className="md-label-small" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+                        Upload last frame
+                      </span>
+                    </div>
+                  )}
+                  <input
+                    ref={lastFrameInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleLastFrameUpload}
+                  />
                 </div>
               </div>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageUpload}
-            />
-          </div>
+            </div>
+          ) : (
+            // Single Image Upload (Legacy)
+            <div
+              className={`rounded-xl border-2 border-dashed p-4 cursor-pointer transition-all duration-200 ${
+                isDraggingSingle
+                  ? "border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]"
+                  : "border-[var(--md-sys-color-outline)] hover:border-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]"
+              }`}
+              onClick={() => singleFileInputRef.current?.click()}
+              onDragOver={handleSingleDragOver}
+              onDragLeave={handleSingleDragLeave}
+              onDrop={handleSingleDrop}
+            >
+              {scene.imageFile ? (
+                <div className="space-y-2">
+                  <NextImage
+                    src={URL.createObjectURL(scene.imageFile)}
+                    alt="Scene image"
+                    width={400}
+                    height={225}
+                    className="w-full h-32 object-cover rounded-lg"
+                  />
+                  <div className="md-body-small text-center" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                    {scene.imageFile.name}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2 py-8">
+                  <Upload className="w-8 h-8" style={{ color: 'var(--md-sys-color-primary)' }} />
+                  <div className="text-center">
+                    <div className="md-label-large" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+                      Upload Image
+                    </div>
+                    <div className="md-body-small" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                      Required for scene
+                    </div>
+                  </div>
+                </div>
+              )}
+              <input
+                ref={singleFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleSingleImageUpload}
+              />
+            </div>
+          )}
         </div>
 
         {/* Prompt and Controls Section */}
         <div className="space-y-4">
-          <textarea
-            value={scene.prompt}
-            onChange={handlePromptChange}
-            placeholder="Describe what happens in this scene..."
-            className="w-full rounded-xl md-surface-container border border-[var(--md-sys-color-outline-variant)] px-4 py-3 md-body-large placeholder-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:ring-2 focus:ring-[var(--md-sys-color-primary)] focus:border-[var(--md-sys-color-primary)] resize-none"
-            style={{ backgroundColor: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface)' }}
-            rows={3}
-          />
+          <div className="relative">
+            <textarea
+              value={scene.prompt}
+              onChange={handlePromptChange}
+              placeholder="Describe what happens in this scene... Use @CharacterName to mention characters"
+              className="w-full rounded-xl md-surface-container border border-[var(--md-sys-color-outline-variant)] px-4 py-3 pr-12 md-body-large placeholder-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:ring-2 focus:ring-[var(--md-sys-color-primary)] focus:border-[var(--md-sys-color-primary)] resize-none"
+              style={{ backgroundColor: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface)' }}
+              rows={3}
+            />
+            {/* Enhance Button */}
+            <button
+              onClick={() => onEnhancePrompt(scene.id)}
+              disabled={!scene.prompt.trim() || scene.isEnhancingPrompt || scene.isGenerating}
+              className={`absolute right-2 top-2 p-2 rounded-lg transition-all ${
+                !scene.prompt.trim() || scene.isEnhancingPrompt || scene.isGenerating
+                  ? "opacity-40 cursor-not-allowed"
+                  : "hover:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer"
+              }`}
+              title="Enhance prompt with AI"
+            >
+              {scene.isEnhancingPrompt ? (
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--md-sys-color-primary)' }} />
+              ) : (
+                <Sparkles className="w-4 h-4" style={{ color: 'var(--md-sys-color-primary)' }} />
+              )}
+            </button>
+          </div>
+
+          {/* Character Selector */}
+          {characters.length > 0 && (
+            <CharacterSelector
+              characters={characters}
+              selectedIds={scene.characterIds || []}
+              onChange={(ids) => onUpdateScene(scene.id, { characterIds: ids })}
+            />
+          )}
 
           <div className="flex items-center justify-between">
             <div>
