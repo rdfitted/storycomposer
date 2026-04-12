@@ -106,11 +106,11 @@ const VeoStudio: React.FC = () => {
     setEndImagePrompt("");
     setOperationName(null);
     setIsGenerating(false);
-    setVideoUrl(null);
-    if (videoBlobRef.current) {
-      URL.revokeObjectURL(URL.createObjectURL(videoBlobRef.current));
-      videoBlobRef.current = null;
+    if (videoUrl) {
+      URL.revokeObjectURL(videoUrl);
+      setVideoUrl(null);
     }
+    videoBlobRef.current = null;
     if (trimmedUrlRef.current) {
       URL.revokeObjectURL(trimmedUrlRef.current);
       trimmedUrlRef.current = null;
@@ -426,14 +426,25 @@ const VeoStudio: React.FC = () => {
     };
   }, [operationName, videoUrl]);
 
+  const pollingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
   // Poll scenes operations
   useEffect(() => {
     const activeScenes = scenes.filter(s => s.operationName && s.isGenerating && !s.videoUrl);
-    if (activeScenes.length === 0) return;
-
-    const timers: ReturnType<typeof setTimeout>[] = [];
+    
+    // Cleanup timers for scenes that are no longer active
+    const activeIds = new Set(activeScenes.map(s => s.id));
+    pollingTimersRef.current.forEach((timer, id) => {
+      if (!activeIds.has(id)) {
+        clearTimeout(timer);
+        pollingTimersRef.current.delete(id);
+      }
+    });
 
     activeScenes.forEach(scene => {
+      // If we already have a timer for this scene, don't start a new one
+      if (pollingTimersRef.current.has(scene.id)) return;
+
       const pollScene = async () => {
         try {
           const resp = await fetch("/api/veo/operation", {
@@ -444,6 +455,7 @@ const VeoStudio: React.FC = () => {
           const fresh = await resp.json();
 
           if (fresh?.done) {
+            pollingTimersRef.current.delete(scene.id);
             const fileUri = fresh?.response?.generatedVideos?.[0]?.video?.uri;
             if (fileUri) {
               const dl = await fetch("/api/veo/download", {
@@ -473,10 +485,11 @@ const VeoStudio: React.FC = () => {
           } else {
             // Continue polling
             const timer = setTimeout(pollScene, POLL_INTERVAL_MS);
-            timers.push(timer);
+            pollingTimersRef.current.set(scene.id, timer);
           }
         } catch (e) {
           console.error(e);
+          pollingTimersRef.current.delete(scene.id);
           setScenes(prev => prev.map(s =>
             s.id === scene.id ? { ...s, isGenerating: false } : s
           ));
@@ -484,13 +497,17 @@ const VeoStudio: React.FC = () => {
       };
 
       const timer = setTimeout(pollScene, POLL_INTERVAL_MS);
-      timers.push(timer);
+      pollingTimersRef.current.set(scene.id, timer);
     });
-
-    return () => {
-      timers.forEach(timer => clearTimeout(timer));
-    };
   }, [scenes]);
+
+  // Global cleanup for polling timers on unmount
+  useEffect(() => {
+    return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      pollingTimersRef.current.forEach(timer => clearTimeout(timer));
+    };
+  }, []);
 
   const onPickStartingFrame = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];

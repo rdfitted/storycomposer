@@ -27,6 +27,26 @@ const HomeCanvas: React.FC<HomeCanvasProps> = () => {
   
   const sceneImageRef = useRef<HTMLImageElement>(null);
 
+  // Cleanup blob URLs for product image
+  React.useEffect(() => {
+    const url = selectedProduct?.imageUrl;
+    return () => {
+      if (url && url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [selectedProduct?.imageUrl]);
+
+  // Cleanup blob URLs for scene image
+  React.useEffect(() => {
+    const url = sceneImage;
+    return () => {
+      if (url && url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [sceneImage]);
+
   const handleProductImageUpload = useCallback((file: File) => {
     setError(null);
     try {

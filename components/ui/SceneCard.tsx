@@ -46,6 +46,40 @@ const SceneCard: React.FC<SceneCardProps> = ({
   const firstFrameInputRef = useRef<HTMLInputElement>(null);
   const lastFrameInputRef = useRef<HTMLInputElement>(null);
 
+  const [firstFrameUrl, setFirstFrameUrl] = useState<string | null>(null);
+  const [lastFrameUrl, setLastFrameUrl] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (scene.firstFrameFile) {
+      const url = URL.createObjectURL(scene.firstFrameFile);
+      setFirstFrameUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setFirstFrameUrl(null);
+    }
+  }, [scene.firstFrameFile]);
+
+  React.useEffect(() => {
+    if (scene.lastFrameFile) {
+      const url = URL.createObjectURL(scene.lastFrameFile);
+      setLastFrameUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setLastFrameUrl(null);
+    }
+  }, [scene.lastFrameFile]);
+
+  React.useEffect(() => {
+    if (scene.imageFile) {
+      const url = URL.createObjectURL(scene.imageFile);
+      setImageUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setImageUrl(null);
+    }
+  }, [scene.imageFile]);
+
   // Single image upload (legacy mode)
   const handleSingleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -247,17 +281,17 @@ const SceneCard: React.FC<SceneCardProps> = ({
                   onDragLeave={handleFirstDragLeave}
                   onDrop={handleFirstDrop}
                 >
-                  {scene.firstFrameFile ? (
+                  {firstFrameUrl ? (
                     <div className="flex items-center gap-2">
                       <NextImage
-                        src={URL.createObjectURL(scene.firstFrameFile)}
+                        src={firstFrameUrl}
                         alt="First frame"
                         width={80}
                         height={45}
                         className="w-16 h-10 object-cover rounded"
                       />
                       <span className="md-body-small truncate" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-                        {scene.firstFrameFile.name}
+                        {scene.firstFrameFile?.name}
                       </span>
                     </div>
                   ) : (
@@ -294,17 +328,17 @@ const SceneCard: React.FC<SceneCardProps> = ({
                   onDragLeave={handleLastDragLeave}
                   onDrop={handleLastDrop}
                 >
-                  {scene.lastFrameFile ? (
+                  {lastFrameUrl ? (
                     <div className="flex items-center gap-2">
                       <NextImage
-                        src={URL.createObjectURL(scene.lastFrameFile)}
+                        src={lastFrameUrl}
                         alt="Last frame"
                         width={80}
                         height={45}
                         className="w-16 h-10 object-cover rounded"
                       />
                       <span className="md-body-small truncate" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-                        {scene.lastFrameFile.name}
+                        {scene.lastFrameFile?.name}
                       </span>
                     </div>
                   ) : (
@@ -338,17 +372,17 @@ const SceneCard: React.FC<SceneCardProps> = ({
               onDragLeave={handleSingleDragLeave}
               onDrop={handleSingleDrop}
             >
-              {scene.imageFile ? (
+              {imageUrl ? (
                 <div className="space-y-2">
                   <NextImage
-                    src={URL.createObjectURL(scene.imageFile)}
+                    src={imageUrl}
                     alt="Scene image"
                     width={400}
                     height={225}
                     className="w-full h-32 object-cover rounded-lg"
                   />
                   <div className="md-body-small text-center" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-                    {scene.imageFile.name}
+                    {scene.imageFile?.name}
                   </div>
                 </div>
               ) : (

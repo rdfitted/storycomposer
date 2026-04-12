@@ -52,6 +52,7 @@ export default function VideoPlayer({
   const [effectiveStartTime, setEffectiveStartTime] = useState(0);
   const [showTrimBar, setShowTrimBar] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const pendingSeekedListenerRef = useRef<(() => void) | null>(null);
 
   // Reset trim UI when the source changes
   useEffect(() => {
@@ -74,6 +75,15 @@ export default function VideoPlayer({
       playerRef.current.volume = volume;
     }
   }, [muted, volume]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingSeekedListenerRef.current && playerRef.current) {
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        playerRef.current.removeEventListener("seeked", pendingSeekedListenerRef.current);
+      }
+    };
+  }, []);
 
   const handlePlayPause = () => {
     if (!playerRef.current) return;
@@ -149,6 +159,7 @@ export default function VideoPlayer({
         setEffectiveDuration(computed);
         setEffectiveStartTime(0);
         video.removeEventListener("seeked", onSeeked);
+        pendingSeekedListenerRef.current = null;
         try {
           if (typeof video.fastSeek === "function") {
             video.fastSeek(0);
@@ -157,6 +168,7 @@ export default function VideoPlayer({
           }
         } catch {}
       };
+      pendingSeekedListenerRef.current = onSeeked;
       video.addEventListener("seeked", onSeeked);
       try {
         video.currentTime = 1e9;
@@ -241,19 +253,6 @@ export default function VideoPlayer({
         recorder.ondataavailable = (e) => {
           if (e.data && e.data.size > 0) chunks.push(e.data);
         };
-        recorder.onstop = () => {
-          if (resolved) return;
-          resolved = true;
-          setIsRecording(false);
-          const type = recorder.mimeType || mimeType || "video/webm";
-          resolve(new Blob(chunks, { type }));
-        };
-        recorder.onerror = () => {
-          if (!resolved) {
-            setIsRecording(false);
-            resolve(null);
-          }
-        };
 
         const onTick = () => {
           const now = playerRef.current?.currentTime ?? 0;
@@ -267,6 +266,24 @@ export default function VideoPlayer({
             } catch {}
           }
         };
+
+        recorder.onstop = () => {
+          video.removeEventListener("timeupdate", onTick);
+          if (resolved) return;
+          resolved = true;
+          setIsRecording(false);
+          const type = recorder.mimeType || mimeType || "video/webm";
+          resolve(new Blob(chunks, { type }));
+        };
+
+        recorder.onerror = () => {
+          video.removeEventListener("timeupdate", onTick);
+          if (!resolved) {
+            setIsRecording(false);
+            resolve(null);
+          }
+        };
+
         video.addEventListener("timeupdate", onTick);
         if (typeof video.fastSeek === "function") {
           video.fastSeek(startTime);

@@ -82,15 +82,16 @@ export const reorderScenes = (
 };
 
 export const cleanupSceneUrls = (scene: Scene): void => {
-  if (scene.videoUrl && scene.videoBlobRef) {
-    URL.revokeObjectURL(scene.videoUrl);
-  }
-  if (scene.originalVideoUrlRef) {
-    URL.revokeObjectURL(scene.originalVideoUrlRef);
-  }
-  if (scene.trimmedUrlRef) {
-    URL.revokeObjectURL(scene.trimmedUrlRef);
-  }
+  const urlsToRevoke = new Set<string>();
+  if (scene.videoUrl) urlsToRevoke.add(scene.videoUrl);
+  if (scene.originalVideoUrlRef) urlsToRevoke.add(scene.originalVideoUrlRef);
+  if (scene.trimmedUrlRef) urlsToRevoke.add(scene.trimmedUrlRef);
+  
+  urlsToRevoke.forEach(url => {
+    if (url.startsWith('blob:')) {
+      URL.revokeObjectURL(url);
+    }
+  });
 };
 
 export const cleanupAllSceneUrls = (scenes: Scene[]): void => {

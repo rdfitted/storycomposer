@@ -20,7 +20,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Scene, cleanupAllSceneUrls } from "@/lib/storyboard";
+import { Scene, cleanupAllSceneUrls, cleanupSceneUrls } from "@/lib/storyboard";
 import SceneCard from "./SceneCard";
 import ModelSelector from "./ModelSelector";
 import CharacterBank from "./storyboard/CharacterBank";
@@ -143,16 +143,7 @@ const StoryboardComposer: React.FC<StoryboardComposerProps> = ({
   const handleRemoveScene = useCallback((sceneId: string) => {
     const sceneToRemove = scenes.find(s => s.id === sceneId);
     if (sceneToRemove) {
-      // Cleanup URLs before removing
-      if (sceneToRemove.videoUrl && sceneToRemove.videoBlobRef) {
-        URL.revokeObjectURL(sceneToRemove.videoUrl);
-      }
-      if (sceneToRemove.originalVideoUrlRef) {
-        URL.revokeObjectURL(sceneToRemove.originalVideoUrlRef);
-      }
-      if (sceneToRemove.trimmedUrlRef) {
-        URL.revokeObjectURL(sceneToRemove.trimmedUrlRef);
-      }
+      cleanupSceneUrls(sceneToRemove);
     }
     setScenes(scenes.filter(scene => scene.id !== sceneId));
   }, [scenes, setScenes]);
